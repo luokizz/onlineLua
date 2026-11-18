@@ -1,0 +1,1101 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Lua 在线运行器 · Lua 5.3</title>
+<style>
+  :root{
+    --bg:#f4f6f8;
+    --panel:#ffffff;
+    --panel-2:#fafbfc;
+    --line:#e5e8ec;
+    --line-2:#eef1f4;
+    --text:#1f2328;
+    --muted:#6b7280;
+    --muted-2:#9aa3ad;
+    --accent:#2563eb;
+    --accent-2:#1d4ed8;
+    --accent-soft:#eaf1ff;
+    --ok:#15803d;
+    --err:#d92d20;
+    --warn:#b45309;
+    --radius:14px;
+    --code-font:ui-monospace,"Cascadia Mono","JetBrains Mono",Consolas,"Courier New",monospace;
+    --ui-font:"Segoe UI","PingFang SC","Microsoft YaHei",system-ui,-apple-system,sans-serif;
+    --code-size:13.5px;
+    --code-lh:21px;
+    --pad-y:12px;
+    --pad-x:14px;
+  }
+  *{box-sizing:border-box;}
+  html,body{height:100%;}
+  body{
+    margin:0;background:var(--bg);color:var(--text);
+    font-family:var(--ui-font);font-size:14px;
+    -webkit-font-smoothing:antialiased;
+    display:flex;flex-direction:column;overflow:hidden;
+  }
+
+  /* ---------- 顶栏 ---------- */
+  .topbar{
+    display:flex;align-items:center;gap:16px;flex-wrap:wrap;
+    padding:12px 18px;background:var(--panel);
+    border-bottom:1px solid var(--line);
+  }
+  .brand{display:flex;align-items:center;gap:11px;min-width:0;}
+  .logo{
+    width:36px;height:36px;border-radius:11px;flex:0 0 auto;
+    background:linear-gradient(140deg,#3b82f6,#1d4ed8);
+    color:#fff;display:grid;place-items:center;
+    font-family:var(--code-font);font-size:17px;font-weight:700;
+    box-shadow:0 4px 12px rgba(37,99,235,.28);
+  }
+  .brand h1{margin:0;font-size:15px;font-weight:650;letter-spacing:.2px;white-space:nowrap;}
+  .brand .sub{margin:2px 0 0;font-size:11.5px;color:var(--muted);white-space:nowrap;
+    overflow:hidden;text-overflow:ellipsis;max-width:46vw;}
+  .brand .sub b{color:var(--text);font-weight:600;}
+  .spacer{flex:1 1 auto;}
+  .actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+
+  .btn{
+    appearance:none;border:1px solid var(--line);background:var(--panel);
+    color:var(--text);border-radius:10px;padding:7px 12px;height:34px;
+    font-family:inherit;font-size:13px;cursor:pointer;
+    display:inline-flex;align-items:center;gap:6px;white-space:nowrap;
+    transition:background .15s,border-color .15s,transform .06s,box-shadow .15s;
+  }
+  .btn:hover{background:var(--panel-2);border-color:#d5dae0;}
+  .btn:active{transform:translateY(1px);}
+  .btn.primary{
+    background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600;
+    padding:7px 15px;box-shadow:0 2px 8px rgba(37,99,235,.25);
+  }
+  .btn.primary:hover{background:var(--accent-2);border-color:var(--accent-2);}
+  .btn.primary[disabled]{opacity:.6;cursor:default;box-shadow:none;}
+  .btn kbd{
+    font-family:var(--code-font);font-size:10.5px;padding:1px 5px;border-radius:5px;
+    background:rgba(255,255,255,.22);border:1px solid rgba(255,255,255,.28);
+  }
+  select.btn{appearance:none;padding-right:26px;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6'><path d='M1 1l4 4 4-4' fill='none' stroke='%236b7280' stroke-width='1.6' stroke-linecap='round'/></svg>");
+    background-repeat:no-repeat;background-position:right 10px center;}
+
+  .seg{display:inline-flex;background:#f1f3f6;border:1px solid var(--line);border-radius:10px;padding:2px;height:34px;}
+  .seg button{
+    appearance:none;border:0;background:transparent;border-radius:8px;
+    padding:0 10px;font-family:inherit;font-size:12.5px;color:var(--muted);
+    cursor:pointer;height:28px;transition:.15s;white-space:nowrap;
+  }
+  .seg button:hover{color:var(--text);}
+  .seg button.on{background:var(--panel);color:var(--accent);font-weight:600;box-shadow:0 1px 3px rgba(16,24,40,.1);}
+  .seg button[disabled]{opacity:.42;cursor:not-allowed;}
+
+  /* ---------- 工作区 ---------- */
+  .workspace{
+    flex:1 1 auto;min-height:0;
+    display:grid;grid-template-columns:minmax(0,1.08fr) minmax(0,1fr);
+    gap:14px;padding:14px 18px 16px;
+  }
+  .pane{
+    display:flex;flex-direction:column;min-height:0;min-width:0;
+    background:var(--panel);border:1px solid var(--line);
+    border-radius:var(--radius);overflow:hidden;
+    box-shadow:0 1px 2px rgba(16,24,40,.04),0 8px 24px -18px rgba(16,24,40,.18);
+  }
+  .pane-head{
+    display:flex;align-items:center;gap:8px;
+    padding:9px 12px;border-bottom:1px solid var(--line-2);background:var(--panel-2);
+    min-height:40px;
+  }
+  .dot{width:8px;height:8px;border-radius:50%;background:#c7ccd3;flex:0 0 auto;}
+  .dot.accent{background:var(--accent);}
+  .dot.ok{background:#22c55e;}
+  .dot.err{background:var(--err);}
+  .dot.busy{background:#f59e0b;animation:pulse 1s infinite;}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+  .pane-title{font-size:12.5px;font-weight:600;letter-spacing:.3px;color:#3d444d;}
+  .pane-head .hint{margin-left:auto;font-size:11.5px;color:var(--muted-2);}
+  .mini{
+    margin-left:auto;appearance:none;border:1px solid transparent;background:transparent;
+    color:var(--muted);border-radius:8px;padding:4px 9px;font-size:12px;cursor:pointer;font-family:inherit;
+  }
+  .mini:hover{background:#eef1f4;color:var(--text);}
+  .meta{font-size:11.5px;color:var(--muted);font-family:var(--code-font);margin-left:8px;}
+  .meta .ok{color:var(--ok);} .meta .bad{color:var(--err);}
+
+  /* ---------- 编辑器 ---------- */
+  .editor{flex:1 1 auto;min-height:0;display:flex;overflow:hidden;}
+  .gutter{
+    flex:0 0 auto;padding:var(--pad-y) 8px var(--pad-y) 12px;
+    text-align:right;color:#b6bcc4;background:var(--panel-2);
+    border-right:1px solid var(--line-2);overflow:hidden;
+    font-family:var(--code-font);font-size:var(--code-size);line-height:var(--code-lh);
+    user-select:none;white-space:pre;tab-size:4;
+  }
+  .gutter .ln{height:var(--code-lh);}
+  .code-area{position:relative;flex:1 1 auto;min-width:0;overflow:hidden;}
+  .hl,.code-area textarea{
+    margin:0;padding:var(--pad-y) var(--pad-x);
+    font-family:var(--code-font);font-size:var(--code-size);line-height:var(--code-lh);
+    white-space:pre;tab-size:4;border:0;
+  }
+  .hl{
+    position:absolute;inset:0;overflow:hidden;pointer-events:none;
+    color:var(--text);
+  }
+  .code-area textarea{
+    position:absolute;inset:0;width:100%;height:100%;
+    background:transparent;color:transparent;caret-color:#111827;
+    resize:none;outline:none;overflow:auto;display:block;
+  }
+  .code-area textarea::selection{background:rgba(37,99,235,.18);color:transparent;}
+  /* 语法着色 */
+  .t-kw{color:#cf222e;} .t-str{color:#0a6b3d;} .t-num{color:#0550ae;}
+  .t-com{color:#8b949e;font-style:italic;} .t-fn{color:#8250df;} .t-lib{color:#953800;}
+
+  .statusbar{
+    display:flex;align-items:center;gap:14px;padding:6px 12px;
+    border-top:1px solid var(--line-2);background:var(--panel-2);
+    font-size:11.5px;color:var(--muted);font-family:var(--code-font);
+  }
+  .statusbar .right{margin-left:auto;display:flex;gap:12px;}
+
+  /* ---------- 控制台 ---------- */
+  .console{
+    flex:1 1 auto;min-height:0;overflow:auto;padding:12px 14px;
+    font-family:var(--code-font);font-size:13px;line-height:1.62;
+    white-space:pre-wrap;word-break:break-word;
+  }
+  .console .placeholder{color:var(--muted-2);font-family:var(--ui-font);font-size:12.5px;line-height:1.9;}
+  .console .row{padding:1px 0;}
+  .console .row.err{color:var(--err);}
+  .console .row.note{color:var(--muted);font-size:12px;}
+  .console .row.ok{color:var(--ok);font-size:12px;}
+  .console .row.bad{color:var(--warn);font-size:12px;}
+  .console a.line{color:var(--accent);text-decoration:none;border-bottom:1px dashed rgba(37,99,235,.5);cursor:pointer;}
+  .console a.line:hover{background:var(--accent-soft);}
+
+  /* ---------- 响应式 ---------- */
+  @media (max-width:1080px){
+    .workspace{grid-template-columns:1fr;grid-template-rows:minmax(0,1.15fr) minmax(0,1fr);gap:12px;padding:12px 14px 14px;}
+    .brand .sub{max-width:38vw;}
+    .actions{width:100%;}
+    #btnRun{margin-left:auto;}
+  }
+  @media (max-width:760px){
+    .topbar{padding:10px 12px;gap:9px;}
+    .brand .sub{display:none;}
+    .brand h1{font-size:14px;}
+    .actions{width:100%;gap:6px;}
+    .seg{order:-1;width:100%;}
+    .seg button{flex:1 1 0;padding:0 4px;}
+    #samples{flex:1 1 88px;min-width:88px;}
+    .btn{height:32px;padding:6px 10px;font-size:12.5px;}
+    .btn.primary kbd{display:none;}
+    #btnRun{margin-left:auto;padding:6px 14px;}
+    .pane-head .hint{display:none;}
+    .workspace{padding:10px;gap:10px;}
+    :root{--code-size:13px;--code-lh:20px;--pad-x:11px;}
+  }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <div class="logo">λ</div>
+    <div>
+      <h1>Lua 在线运行器</h1>
+      <p class="sub" id="engineInfo">正在检测执行引擎…</p>
+    </div>
+  </div>
+  <div class="spacer"></div>
+  <div class="actions">
+    <div class="seg" id="engineSeg" title="切换执行引擎">
+      <button data-engine="auto" class="on">自动</button>
+      <button data-engine="native" id="segNative">本地 lua.exe</button>
+      <button data-engine="browser" id="segBrowser">浏览器</button>
+    </div>
+    <select class="btn" id="samples" title="载入示例">
+      <option value="">载入示例…</option>
+    </select>
+    <button class="btn" id="btnOpen" title="打开本地 .lua 文件">打开</button>
+    <button class="btn" id="btnSave" title="下载为 .lua">下载</button>
+    <button class="btn primary" id="btnRun">▶ 运行 <kbd>Ctrl ↵</kbd></button>
+  </div>
+</header>
+
+<main class="workspace">
+  <section class="pane">
+    <div class="pane-head">
+      <span class="dot accent"></span>
+      <span class="pane-title" id="fileName">main.lua</span>
+      <span class="hint" id="engineHint">Ctrl + Enter 运行 · Tab 缩进</span>
+    </div>
+    <div class="editor">
+      <div class="gutter" id="gutter"><div class="ln">1</div></div>
+      <div class="code-area">
+        <pre class="hl" id="hl" aria-hidden="true"></pre>
+        <textarea id="code" spellcheck="false" wrap="off" autocomplete="off"
+          autocapitalize="off" autocorrect="off" aria-label="Lua 代码编辑器"></textarea>
+      </div>
+    </div>
+    <div class="statusbar">
+      <span id="pos">行 1, 列 1</span>
+      <span id="stat">0 字符</span>
+      <div class="right"><span id="saveState"></span><span id="verInfo">Lua 5.3</span></div>
+    </div>
+  </section>
+
+  <section class="pane">
+    <div class="pane-head">
+      <span class="dot" id="outDot"></span>
+      <span class="pane-title">输出</span>
+      <span class="meta" id="runMeta"></span>
+      <button class="mini" id="btnClear">清空</button>
+    </div>
+    <div class="console" id="console">
+      <div class="placeholder">点击「运行」或按 Ctrl + Enter 执行脚本，print 的输出会显示在这里。</div>
+    </div>
+  </section>
+</main>
+
+<input type="file" id="fileInput" accept=".lua,.txt,text/plain" hidden>
+<script src="vendor/fengari-web.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  var $ = function (s) { return document.querySelector(s); };
+  var ta = $('#code'), hl = $('#hl'), gutter = $('#gutter'), consoleEl = $('#console');
+  var btnRun = $('#btnRun'), runMeta = $('#runMeta'), outDot = $('#outDot');
+  var engineInfo = $('#engineInfo'), saveState = $('#saveState'), fileName = $('#fileName');
+
+  var LS_CODE = 'luaweb.code.v1';
+  var LS_ENGINE = 'luaweb.engine.v1';
+
+  // file:// 下部分浏览器禁用 localStorage，统一包一层避免抛错中断初始化
+  function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+  function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) { /* ignore */ } }
+
+  /* ================= 示例代码 ================= */
+  var SAMPLES = [
+    { name: '基础：变量与输出', code:
+'-- Lua 5.3 基础\n' +
+'print("Hello, Lua!")\n' +
+'print(_VERSION)\n' +
+'\n' +
+'local name = "世界"\n' +
+'print("你好, " .. name)\n' +
+'\n' +
+'-- 5.3 起整数与浮点数区分\n' +
+'print(10 / 2, 10 // 2, 2 ^ 10)\n' +
+'print(math.type(3), math.type(3.0))\n' +
+'print(string.format("%d / %.2f", 7, 7))\n' +
+'\n' +
+'-- 循环 + io.write\n' +
+'for i = 1, 5 do\n' +
+'  io.write(i, " ")\n' +
+'end\n' +
+'print()\n'
+    },
+    { name: '字符串处理', code:
+'local s = "Lua 5.3 / Windows"\n' +
+'print(#s, s:upper(), s:sub(1, 3))\n' +
+'\n' +
+'-- 替换与匹配\n' +
+'print(("a,b,c"):gsub(",", "-"))\n' +
+'for w in ("one two three"):gmatch("%a+") do\n' +
+'  print("词:", w)\n' +
+'end\n' +
+'\n' +
+'-- 格式化\n' +
+'print(string.format("%-8s|%6.2f|%05d", "id", 3.14159, 42))\n' +
+'print(("%q"):format([[带"引号"的文本]]))\n' +
+'\n' +
+'local t = {"t", "b"}\n' +
+'print(table.concat(t, "-"))\n'
+    },
+    { name: '表与迭代', code:
+'local t = {1, 2, 3, apple = "红苹果", [10] = "第十项"}\n' +
+'print(#t, t[1], t.apple, t[10])\n' +
+'\n' +
+'table.insert(t, 4)\n' +
+'for i, v in ipairs(t) do\n' +
+'  io.write(i, "=", tostring(v), " ")\n' +
+'end\n' +
+'print()\n' +
+'\n' +
+'for k, v in pairs({a = 1, b = 2}) do\n' +
+'  print(k, v)\n' +
+'end\n' +
+'\n' +
+'-- 排序\n' +
+'local nums = {5, 2, 9, 1}\n' +
+'table.sort(nums)\n' +
+'print(table.concat(nums, ", "))\n' +
+'table.sort(nums, function (a, b) return a > b end)\n' +
+'print(table.concat(nums, ", "))\n' +
+'\n' +
+'-- 表拼接\n' +
+'local function join(sep, list)\n' +
+'  return table.concat(list, sep)\n' +
+'end\n' +
+'print(join(" | ", {"A", "B", "C"}))\n'
+    },
+    { name: '函数与闭包', code:
+'local function counter(start)\n' +
+'  local n = start or 0\n' +
+'  return function (step)\n' +
+'    n = n + (step or 1)\n' +
+'    return n\n' +
+'  end\n' +
+'end\n' +
+'\n' +
+'local c = counter(10)\n' +
+'print(c(), c(5), c())\n' +
+'\n' +
+'-- 变长参数\n' +
+'local function sum(...)\n' +
+'  local total = 0\n' +
+'  for _, v in ipairs({...}) do total = total + v end\n' +
+'  return total, select("#", ...)\n' +
+'end\n' +
+'\n' +
+'local total, n = sum(1, 2, 3, 4)\n' +
+'print("合计", total, "个数", n)\n' +
+'\n' +
+'-- 多返回值\n' +
+'local function divmod(a, b)\n' +
+'  return a // b, a % b\n' +
+'end\n' +
+'print(divmod(17, 5))\n'
+    },
+    { name: '面向对象（元表）', code:
+'local Account = {}\n' +
+'Account.__index = Account\n' +
+'\n' +
+'function Account.new(owner, balance)\n' +
+'  return setmetatable({owner = owner, balance = balance or 0}, Account)\n' +
+'end\n' +
+'\n' +
+'function Account:deposit(v)\n' +
+'  self.balance = self.balance + v\n' +
+'  return self\n' +
+'end\n' +
+'\n' +
+'Account.__tostring = function (self)\n' +
+'  return string.format("%s 余额 %.2f", self.owner, self.balance)\n' +
+'end\n' +
+'\n' +
+'local a = Account.new("小明", 100)\n' +
+'a:deposit(50):deposit(25)\n' +
+'print(tostring(a))\n' +
+'print(getmetatable(a) == Account)\n' +
+'\n' +
+'-- __add 元方法\n' +
+'local mt = {__add = function (x, y) return x.balance + y.balance end}\n' +
+'local b = setmetatable({balance = 30}, mt)\n' +
+'print("相加:", a + b)\n'
+    },
+    { name: '协程', code:
+'local function producer()\n' +
+'  for i = 1, 4 do\n' +
+'    coroutine.yield("数据块 #" .. i)\n' +
+'  end\n' +
+'  return "结束"\n' +
+'end\n' +
+'\n' +
+'local co = coroutine.create(producer)\n' +
+'while true do\n' +
+'  local ok, v = coroutine.resume(co)\n' +
+'  if not ok then\n' +
+'    print("出错:", v)\n' +
+'    break\n' +
+'  end\n' +
+'  print(v, "| 状态:", coroutine.status(co))\n' +
+'  if coroutine.status(co) == "dead" then break end\n' +
+'end\n'
+    },
+    { name: '整数与位运算', code:
+'-- 5.3 新增：整数除法、位运算、最大最小整数\n' +
+'print(3 // 2, 3 % 2, -7 // 2)\n' +
+'print(0x1F, 1 << 4, 0x0F & 0x33, 0x0F | 0x30, ~0x0F)\n' +
+'print(math.maxinteger, math.mininteger)\n' +
+'print((1 << 63) - 1)\n' +
+'\n' +
+'-- 十六进制格式化（485/645 报文常用）\n' +
+'local bytes = {0x68, 0x11, 0x04, 0x16}\n' +
+'local hex = {}\n' +
+'for i, b in ipairs(bytes) do\n' +
+'  hex[i] = string.format("%02X", b)\n' +
+'end\n' +
+'print(table.concat(hex, " "))\n' +
+'\n' +
+'-- 整数溢出回绕\n' +
+'print(math.maxinteger + 1 == math.mininteger)\n' +
+'\n' +
+'-- 浮点与整数互转\n' +
+'print(math.tointeger(3.0), math.tointeger(3.5))\n'
+    },
+    { name: '错误处理', code:
+'local function risky(x)\n' +
+'  assert(type(x) == "number", "需要数字")\n' +
+'  if x < 0 then error("不能是负数: " .. x) end\n' +
+'  return math.sqrt(x)\n' +
+'end\n' +
+'\n' +
+'print("正常:", risky(16))\n' +
+'\n' +
+'local ok, err = pcall(risky, "abc")\n' +
+'print("pcall 字符串:", ok, err)\n' +
+'\n' +
+'local ok2, err2 = pcall(risky, -1)\n' +
+'print("pcall 负数:", ok2, err2)\n' +
+'\n' +
+'-- 抛出结构化的错误对象\n' +
+'local ok3, e = pcall(function ()\n' +
+'  error({code = 1001, msg = "设备离线"})\n' +
+'end)\n' +
+'if not ok3 then\n' +
+'  print("错误码:", e.code, "信息:", e.msg)\n' +
+'end\n'
+    },
+    { name: 'DL/T 645 帧解析', code:
+'-- DL/T 645-2007 帧解析示例\n' +
+'local function parse645(frame)\n' +
+'  frame = frame:gsub("%s+", "")\n' +
+'  assert(#frame >= 24, "报文过短")\n' +
+'  assert(frame:sub(1, 2) == "68", "起始符不是 68H")\n' +
+'  assert(frame:sub(15, 16) == "68", "第二个 68H 缺失")\n' +
+'  assert(frame:sub(-2) == "16", "结束符不是 16H")\n' +
+'\n' +
+'  local addrHex = frame:sub(3, 14)\n' +
+'  local ctrl = frame:sub(17, 18)\n' +
+'  local len = tonumber(frame:sub(19, 20), 16)\n' +
+'  local dataHex = frame:sub(21, 20 + len * 2)\n' +
+'  local csHex = frame:sub(21 + len * 2, 22 + len * 2)\n' +
+'\n' +
+'  -- 表地址：6 字节 BCD，低字节在前\n' +
+'  local parts = {}\n' +
+'  for i = 11, 1, -2 do\n' +
+'    parts[#parts + 1] = addrHex:sub(i, i + 1)\n' +
+'  end\n' +
+'  local addr = table.concat(parts)\n' +
+'\n' +
+'  -- 校验和：68H 到数据域结束逐字节求和取低 8 位\n' +
+'  local sum = 0\n' +
+'  for i = 1, 20 + len * 2, 2 do\n' +
+'    sum = sum + tonumber(frame:sub(i, i + 1), 16)\n' +
+'  end\n' +
+'  sum = sum % 256\n' +
+'\n' +
+'  return {\n' +
+'    addr = addr,\n' +
+'    ctrl = ctrl,\n' +
+'    len = len,\n' +
+'    data = dataHex:gsub("(..)", "%1 "):gsub(" $", ""),\n' +
+'    cs = csHex,\n' +
+'    calc = string.format("%02X", sum),\n' +
+'  }\n' +
+'end\n' +
+'\n' +
+'local frame = "68 56 34 12 00 00 00 68 11 04 33 33 33 34 4E 16"\n' +
+'local r = parse645(frame)\n' +
+'\n' +
+'print("报文   :", frame)\n' +
+'print("表地址 :", r.addr)\n' +
+'print("控制码 :", r.ctrl)\n' +
+'print("数据长 :", r.len)\n' +
+'print("数据域 :", r.data)\n' +
+'print("校验和 :", "报文 " .. r.cs, "计算 " .. r.calc,\n' +
+'      r.cs == r.calc and "通过" or "不匹配")\n'
+    }
+  ];
+
+  /* ================= 语法高亮 ================= */
+  var KEYWORDS = {
+    'and':1,'break':1,'do':1,'else':1,'elseif':1,'end':1,'false':1,'for':1,
+    'function':1,'goto':1,'if':1,'in':1,'local':1,'nil':1,'not':1,'or':1,
+    'repeat':1,'return':1,'then':1,'true':1,'until':1,'while':1
+  };
+  var LIBS = {
+    'print':1,'pairs':1,'ipairs':1,'type':1,'tostring':1,'tonumber':1,
+    'string':1,'table':1,'math':1,'os':1,'io':1,'coroutine':1,'require':1,
+    'pcall':1,'xpcall':1,'error':1,'assert':1,'select':1,'setmetatable':1,
+    'getmetatable':1,'rawget':1,'rawset':1,'rawequal':1,'rawlen':1,'next':1,
+    'unpack':1,'utf8':1,'package':1,'debug':1,'self':1,'_G':1,'_VERSION':1
+  };
+
+  function esc(s) {
+    return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  function highlight(src) {
+    var out = '', i = 0, n = src.length;
+    while (i < n) {
+      var c = src.charAt(i);
+
+      // 注释
+      if (c === '-' && src.charAt(i + 1) === '-') {
+        // 长注释 --[[ ]]
+        if (src.substr(i, 3) === '--[') {
+          var m = /^--\[(=*)\[/.exec(src.slice(i));
+          if (m) {
+            var close = ']' + m[1] + ']';
+            var endIdx = src.indexOf(close, i + m[0].length);
+            endIdx = endIdx < 0 ? n : endIdx + close.length;
+            out += '<span class="t-com">' + esc(src.slice(i, endIdx)) + '</span>';
+            i = endIdx;
+            continue;
+          }
+        }
+        var nl = src.indexOf('\n', i);
+        if (nl < 0) nl = n;
+        out += '<span class="t-com">' + esc(src.slice(i, nl)) + '</span>';
+        i = nl;
+        continue;
+      }
+
+      // 长字符串 [[ ]]
+      if (c === '[' && /^\[(=*)\[/.test(src.slice(i))) {
+        var mm = /^\[(=*)\[/.exec(src.slice(i));
+        var closeS = ']' + mm[1] + ']';
+        var e2 = src.indexOf(closeS, i + mm[0].length);
+        e2 = e2 < 0 ? n : e2 + closeS.length;
+        out += '<span class="t-str">' + esc(src.slice(i, e2)) + '</span>';
+        i = e2;
+        continue;
+      }
+
+      // 短字符串
+      if (c === '"' || c === "'") {
+        var j = i + 1;
+        while (j < n) {
+          var ch = src.charAt(j);
+          if (ch === '\\') { j += 2; continue; }
+          if (ch === c || ch === '\n') { j++; break; }
+          j++;
+        }
+        out += '<span class="t-str">' + esc(src.slice(i, j)) + '</span>';
+        i = j;
+        continue;
+      }
+
+      // 数字
+      if (/[0-9]/.test(c) || (c === '.' && /[0-9]/.test(src.charAt(i + 1) || ''))) {
+        var mnum = /^(0[xX][0-9a-fA-F]+|\d+\.?\d*(?:[eE][+-]?\d+)?|\.\d+(?:[eE][+-]?\d+)?)/.exec(src.slice(i));
+        if (mnum) {
+          out += '<span class="t-num">' + esc(mnum[0]) + '</span>';
+          i += mnum[0].length;
+          continue;
+        }
+      }
+
+      // 标识符
+      if (/[A-Za-z_]/.test(c)) {
+        var mword = /^[A-Za-z_]\w*/.exec(src.slice(i));
+        var w = mword[0];
+        i += w.length;
+        if (KEYWORDS[w]) { out += '<span class="t-kw">' + w + '</span>'; continue; }
+        var look = src.slice(i).match(/^\s*\(/);
+        if (look) { out += '<span class="t-fn">' + w + '</span>'; continue; }
+        if (LIBS[w]) { out += '<span class="t-lib">' + w + '</span>'; continue; }
+        out += esc(w);
+        continue;
+      }
+
+      out += esc(c);
+      i++;
+    }
+    return out + '\n ';
+  }
+
+  /* ================= 编辑器同步 ================= */
+  var renderQueued = false;
+
+  function renderNow() {
+    renderQueued = false;
+    var value = ta.value;
+    hl.innerHTML = highlight(value);
+
+    var lines = value.split('\n').length;
+    if (lines < 1) lines = 1;
+    var buf = [];
+    for (var k = 1; k <= lines; k++) buf.push('<div class="ln">' + k + '</div>');
+    gutter.innerHTML = buf.join('');
+
+    syncScroll();
+    updateStatus();
+  }
+
+  function render() {
+    if (renderQueued) return;
+    renderQueued = true;
+    requestAnimationFrame(renderNow);
+  }
+
+  function syncScroll() {
+    hl.scrollTop = ta.scrollTop;
+    hl.scrollLeft = ta.scrollLeft;
+    gutter.scrollTop = ta.scrollTop;
+  }
+
+  function updateStatus() {
+    var v = ta.value;
+    var upto = v.slice(0, ta.selectionStart);
+    var line = upto.split('\n').length;
+    var col = ta.selectionStart - upto.lastIndexOf('\n');
+    $('#pos').textContent = '行 ' + line + ', 列 ' + col;
+    $('#stat').textContent = v.length + ' 字符';
+  }
+
+  ta.addEventListener('input', function () {
+    render();
+    markDirty();
+  });
+  ta.addEventListener('scroll', syncScroll);
+  ta.addEventListener('click', updateStatus);
+  ta.addEventListener('keyup', updateStatus);
+  ta.addEventListener('select', updateStatus);
+
+  // Tab / Shift+Tab 缩进
+  ta.addEventListener('keydown', function (e) {
+    var start = ta.selectionStart, end = ta.selectionEnd;
+
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      var v = ta.value;
+      if (start === end) {
+        if (e.shiftKey) {
+          // 行首退格 2 空格
+          var lineStart = v.lastIndexOf('\n', start - 1) + 1;
+          var head = v.slice(lineStart, start);
+          var cut = head.match(/^ {1,2}/);
+          if (cut) {
+            ta.value = v.slice(0, lineStart) + v.slice(lineStart + cut[0].length);
+            ta.selectionStart = ta.selectionEnd = start - cut[0].length;
+          }
+        } else {
+          ta.value = v.slice(0, start) + '  ' + v.slice(end);
+          ta.selectionStart = ta.selectionEnd = start + 2;
+        }
+      } else {
+        var before = v.slice(0, start);
+        var block = v.slice(start, end);
+        var ls = before.lastIndexOf('\n') + 1;
+        var body = v.slice(ls, end);
+        var rows = body.split('\n');
+        if (e.shiftKey) {
+          rows = rows.map(function (r) { return r.replace(/^ {1,2}/, ''); });
+        } else {
+          rows = rows.map(function (r) { return '  ' + r; });
+        }
+        var nb = rows.join('\n');
+        ta.value = v.slice(0, ls) + nb + v.slice(end);
+        ta.selectionStart = ls;
+        ta.selectionEnd = ls + nb.length;
+      }
+      render();
+      markDirty();
+      return;
+    }
+
+    if (e.key === 'Enter') {
+      var v2 = ta.value;
+      var lineStart2 = v2.lastIndexOf('\n', start - 1) + 1;
+      var curLine = v2.slice(lineStart2, start);
+      var indent = (curLine.match(/^[ \t]*/) || [''])[0];
+      if (/(then|do|else|function\s*\(.*\)|\{)$/.test(curLine.trim()) || /^\s*(else|elseif)\b/.test(curLine)) {
+        indent += '  ';
+      }
+      if (indent) {
+        e.preventDefault();
+        var ins = '\n' + indent;
+        ta.value = v2.slice(0, start) + ins + v2.slice(end);
+        ta.selectionStart = ta.selectionEnd = start + ins.length;
+        render();
+        markDirty();
+      }
+      return;
+    }
+
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+      e.preventDefault();
+      run();
+      return;
+    }
+    if ((e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'S')) {
+      e.preventDefault();
+      download();
+    }
+  });
+
+  /* ================= 输出面板 ================= */
+  function clearConsole() {
+    consoleEl.innerHTML = '';
+  }
+  function addRow(text, cls) {
+    var div = document.createElement('div');
+    div.className = 'row' + (cls ? ' ' + cls : '');
+    div.textContent = text;
+    consoleEl.appendChild(div);
+    consoleEl.scrollTop = consoleEl.scrollHeight;
+    return div;
+  }
+  // 输出里带 script.lua:12 时可点击跳行
+  function addStream(text, cls) {
+    if (!text) return;
+    var lines = String(text).replace(/\r\n/g, '\n').replace(/\r/g, '').split('\n');
+    if (lines.length && lines[lines.length - 1] === '') lines.pop();
+    lines.forEach(function (line) {
+      var div = addRow(line, cls);
+      var m = /(?:^|\s)((?:script|lua|main)\.lua:(\d+))/.exec(line);
+      if (m) {
+        var idx = m.index + (m[0].length - m[1].length);
+        var pre = line.slice(0, idx);
+        var post = line.slice(idx + m[1].length);
+        div.textContent = '';
+        div.appendChild(document.createTextNode(pre));
+        var a = document.createElement('a');
+        a.className = 'line';
+        a.textContent = m[1];
+        a.title = '跳到第 ' + m[2] + ' 行';
+        a.addEventListener('click', function () { gotoLine(parseInt(m[2], 10)); });
+        div.appendChild(a);
+        div.appendChild(document.createTextNode(post));
+      }
+    });
+  }
+  function gotoLine(n) {
+    var lines = ta.value.split('\n');
+    var idx = 0;
+    for (var i = 0; i < Math.min(n - 1, lines.length); i++) idx += lines[i].length + 1;
+    ta.focus();
+    ta.setSelectionRange(idx, idx + (lines[n - 1] || '').length);
+    // 滚动到可视区
+    var lh = parseFloat(getComputedStyle(ta).lineHeight) || 21;
+    ta.scrollTop = Math.max(0, (n - 3) * lh);
+    syncScroll();
+    updateStatus();
+  }
+
+  /* ================= 引擎 ================= */
+  var nativeInfo = null;
+  var engineMode = lsGet(LS_ENGINE) || 'auto';
+  var running = false;
+
+  function detectNative() {
+    return new Promise(function (resolve) {
+      if (!/^https?:$/.test(location.protocol)) { resolve(null); return; }
+      var ctrl = window.AbortController ? new AbortController() : null;
+      var timer = setTimeout(function () { if (ctrl) ctrl.abort(); resolve(null); }, 1200);
+      fetch('/api/ping', ctrl ? { signal: ctrl.signal, cache: 'no-store' } : { cache: 'no-store' })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (j) {
+          clearTimeout(timer);
+          resolve(j && j.ok ? j : null);
+        })
+        .catch(function () { clearTimeout(timer); resolve(null); });
+    });
+  }
+
+  function effectiveEngine() {
+    if (engineMode === 'native') return nativeInfo ? 'native' : 'browser';
+    if (engineMode === 'browser') return 'browser';
+    return nativeInfo ? 'native' : 'browser';
+  }
+
+  function paintEngine() {
+    var eng = effectiveEngine();
+    if (nativeInfo) {
+      engineInfo.innerHTML = '引擎：<b>本地 lua.exe</b> · ' + esc(nativeInfo.lua || 'Lua 5.3') + ' · 支持 io / os / require';
+    } else {
+      engineInfo.innerHTML = '引擎：<b>浏览器内置</b> · Lua 5.3（纯前端，无需后端；无文件读写）';
+    }
+    if (engineMode === 'native' && !nativeInfo) {
+      engineInfo.innerHTML += ' —— 未检测到本地服务，已回退浏览器引擎';
+    }
+    $('#segNative').disabled = !nativeInfo;
+    $('#segBrowser').disabled = false;
+    Array.prototype.forEach.call(document.querySelectorAll('#engineSeg button'), function (b) {
+      b.classList.toggle('on', b.getAttribute('data-engine') === engineMode);
+    });
+    $('#engineHint').textContent = eng === 'native'
+      ? '真实 lua.exe 执行 · Ctrl + Enter 运行'
+      : '浏览器内置执行 · Ctrl + Enter 运行';
+    $('#verInfo').textContent = eng === 'native' ? 'lua.exe · 5.3.6' : 'fengari · 5.3';
+  }
+
+  document.querySelectorAll('#engineSeg button').forEach(function (b) {
+    b.addEventListener('click', function () {
+      if (b.disabled) return;
+      engineMode = b.getAttribute('data-engine');
+      lsSet(LS_ENGINE, engineMode);
+      paintEngine();
+    });
+  });
+
+  /* ================= 执行 ================= */
+  var PROLOGUE =
+    'local __emit = __emit\n' +
+    'local __tostr = tostring\n' +
+    '_G.print = function (...)\n' +
+    '  local n = select("#", ...)\n' +
+    '  local t = {}\n' +
+    '  for i = 1, n do t[i] = __tostr((select(i, ...))) end\n' +
+    '  __emit(table.concat(t, "\\t"))\n' +
+    'end\n' +
+    'if not io then _G.io = {} end\n' +
+    'io.write = function (...)\n' +
+    '  local n = select("#", ...)\n' +
+    '  local t = {}\n' +
+    '  for i = 1, n do t[i] = __tostr((select(i, ...))) end\n' +
+    '  __emit(table.concat(t))\n' +
+    'end\n';
+
+  function setRunning(on) {
+    running = on;
+    btnRun.disabled = on;
+    outDot.className = 'dot ' + (on ? 'busy' : '');
+    if (on) {
+      btnRun.textContent = '运行中…';
+    } else {
+      btnRun.innerHTML = '▶ 运行 <kbd>Ctrl ↵</kbd>';
+    }
+  }
+
+  function runBrowser(code) {
+    var F = window.fengari;
+    if (!F) {
+      addStream('内置 Lua 引擎未加载：缺少 vendor/fengari-web.js，请改用本地 lua.exe 引擎。', 'err');
+      finishRun(false, 0, '引擎缺失');
+      return;
+    }
+    var lua = F.lua, lauxlib = F.lauxlib, lualib = F.lualib, to_luastring = F.to_luastring;
+    var t0 = performance.now();
+    var L = null;
+    try {
+      L = lauxlib.luaL_newstate();
+      lualib.luaL_openlibs(L);
+
+      lua.lua_pushcfunction(L, function (L2) {
+        addStream(lua.lua_tojsstring(L2, 1), '');
+        return 0;
+      });
+      lua.lua_setglobal(L, to_luastring('__emit'));
+
+      // 指令数上限，避免死循环把标签页卡死
+      if (lua.lua_sethook && lua.LUA_MASKCOUNT) {
+        var ticks = 0;
+        lua.lua_sethook(L, function (L2) {
+          ticks++;
+          if (ticks > 8) {
+            lua.lua_sethook(L2, null, 0, 0);
+            lauxlib.luaL_error(L2, to_luastring('脚本执行超时：指令数超过 8 亿，已中止'));
+          }
+        }, lua.LUA_MASKCOUNT, 100000000);
+      }
+
+      // 前置代码单独编译执行，保证用户代码的行号不被偏移
+      var preStatus = lauxlib.luaL_loadbuffer(L, to_luastring(PROLOGUE), null, to_luastring('=prelude'));
+      if (preStatus !== lua.LUA_OK) {
+        addStream('引擎初始化失败: ' + lua.lua_tojsstring(L, -1), 'err');
+        finishRun(false, performance.now() - t0, '引擎异常');
+        return;
+      }
+      if (lua.lua_pcall(L, 0, 0, 0) !== lua.LUA_OK) {
+        addStream('引擎初始化失败: ' + lua.lua_tojsstring(L, -1), 'err');
+        finishRun(false, performance.now() - t0, '引擎异常');
+        return;
+      }
+
+      var status = lauxlib.luaL_loadbuffer(
+        L,
+        to_luastring(code),
+        null,
+        to_luastring('=script.lua')
+      );
+      if (status !== lua.LUA_OK) {
+        addStream(lua.lua_tojsstring(L, -1), 'err');
+        finishRun(false, performance.now() - t0, '语法错误');
+        return;
+      }
+      var st = lua.lua_pcall(L, 0, 0, 0);
+      if (st !== lua.LUA_OK) {
+        var msg = lua.lua_tojsstring(L, -1);
+        addStream(msg, 'err');
+        if (/attempt to (call|index) a nil value/.test(msg)) {
+          addRow('提示：浏览器内置引擎没有文件系统与子进程能力（如 io.open / os.execute / require 本地文件）。' +
+            '需要这些功能请运行 启动.bat，并切到「本地 lua.exe」引擎。', 'note');
+        }
+        finishRun(false, performance.now() - t0, '运行出错');
+        return;
+      }
+      finishRun(true, performance.now() - t0, '');
+    } catch (err) {
+      addStream('引擎异常: ' + (err && err.message ? err.message : String(err)), 'err');
+      finishRun(false, performance.now() - t0, '引擎异常');
+    }
+  }
+
+  function runNative(code) {
+    var t0 = performance.now();
+    return fetch('/api/run', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: code, timeout: 10 })
+    }).then(function (r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    }).then(function (j) {
+      if (j.stdout) addStream(j.stdout, '');
+      if (j.stderr) addStream(j.stderr, 'err');
+      if (j.timedOut) {
+        addStream('执行超时（10 秒），进程已强制结束。', 'note');
+      }
+      finishRun(!!j.ok, j.ms != null ? j.ms : (performance.now() - t0),
+        j.ok ? '' : ('退出码 ' + j.code));
+    }).catch(function (err) {
+      nativeInfo = null;
+      paintEngine();
+      addStream('无法连接本地服务（' + err.message + '），已回退到浏览器内置引擎。', 'note');
+      runBrowser(code);
+    });
+  }
+
+  function finishRun(ok, ms, note) {
+    setRunning(false);
+    outDot.className = 'dot ' + (ok ? 'ok' : 'err');
+    var txt = ms < 1 ? '<1 ms' : Math.round(ms) + ' ms';
+    runMeta.innerHTML = ok
+      ? '<span class="ok">✓ 完成</span> · ' + txt
+      : '<span class="bad">✗ 失败</span> · ' + txt + (note ? ' · ' + esc(note) : '');
+    if (!consoleEl.children.length) addRow('（脚本没有输出）', 'note');
+  }
+
+  function run() {
+    if (running) return;
+    var code = ta.value;
+    if (!code.trim()) {
+      clearConsole();
+      addRow('代码是空的，写点什么再运行吧。', 'note');
+      outDot.className = 'dot';
+      return;
+    }
+    clearConsole();
+    setRunning(true);
+    runMeta.textContent = '';
+    var eng = effectiveEngine();
+    if (eng === 'native') {
+      runNative(code);
+    } else {
+      // 让“运行中”状态先渲染出来
+      setTimeout(function () { runBrowser(code); }, 16);
+    }
+  }
+
+  btnRun.addEventListener('click', run);
+  $('#btnClear').addEventListener('click', function () {
+    clearConsole();
+    runMeta.textContent = '';
+    outDot.className = 'dot';
+  });
+
+  document.addEventListener('keydown', function (e) {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+      e.preventDefault();
+      run();
+    }
+  });
+
+  /* ================= 文件 / 示例 / 持久化 ================= */
+  function markDirty() {
+    saveState.textContent = '未保存';
+    clearTimeout(markDirty._t);
+    markDirty._t = setTimeout(function () {
+      try {
+        lsSet(LS_CODE, ta.value);
+        saveState.textContent = '已自动保存';
+      } catch (err) {
+        saveState.textContent = '';
+      }
+    }, 600);
+  }
+
+  function download() {
+    var blob = new Blob([ta.value], { type: 'text/plain;charset=utf-8' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = fileName.textContent && /\.lua$/.test(fileName.textContent) ? fileName.textContent : 'main.lua';
+    a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); }, 4000);
+  }
+  $('#btnSave').addEventListener('click', download);
+
+  $('#btnOpen').addEventListener('click', function () { $('#fileInput').click(); });
+  $('#fileInput').addEventListener('change', function (e) {
+    var f = e.target.files && e.target.files[0];
+    if (!f) return;
+    var reader = new FileReader();
+    reader.onload = function () {
+      ta.value = String(reader.result || '').replace(/\r\n/g, '\n');
+      fileName.textContent = f.name;
+      renderNow();
+      markDirty();
+      clearConsole();
+      addRow('已载入文件：' + f.name + '（' + ta.value.length + ' 字符）', 'note');
+      outDot.className = 'dot';
+      runMeta.textContent = '';
+      ta.focus();
+      ta.selectionStart = ta.selectionEnd = 0;
+    };
+    reader.readAsText(f, 'utf-8');
+    e.target.value = '';
+  });
+
+  var sampleSel = $('#samples');
+  SAMPLES.forEach(function (s, i) {
+    var o = document.createElement('option');
+    o.value = String(i);
+    o.textContent = s.name;
+    sampleSel.appendChild(o);
+  });
+  sampleSel.addEventListener('change', function () {
+    var i = sampleSel.value;
+    sampleSel.value = '';
+    if (i === '') return;
+    if (ta.value.trim() && !window.confirm('载入示例会覆盖当前编辑器内容，继续？')) return;
+    ta.value = SAMPLES[Number(i)].code;
+    fileName.textContent = 'main.lua';
+    renderNow();
+    markDirty();
+    clearConsole();
+    outDot.className = 'dot';
+    runMeta.textContent = '';
+    ta.focus();
+    ta.selectionStart = ta.selectionEnd = 0;
+  });
+
+  /* ================= 启动 ================= */
+  var DEFAULT_CODE = SAMPLES[0].code;
+
+  // 用 DOM 建初始代码，避免 HTML 里的缩进混进 Lua
+  ta.value = lsGet(LS_CODE) || DEFAULT_CODE;
+  renderNow();
+  saveState.textContent = '';
+
+  detectNative().then(function (info) {
+    nativeInfo = info;
+    paintEngine();
+    if (!info && engineMode === 'native') {
+      engineMode = 'auto';
+      lsSet(LS_ENGINE, 'auto');
+      paintEngine();
+    }
+  });
+})();
+</script>
+</body>
+</html>
